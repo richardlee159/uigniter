@@ -4,8 +4,8 @@ const (
 	FirecrackerBinary = "firecracker"
 	RepositoryRoot    = "/var/lib/uigniter/"
 	DefaultKernel     = "kernel/kernel.elf"
-	DefaultGateway    = "172.16.0.0"
-	DefaultSubnetMask = "255.255.0.0"
+	DefaultGateway    = "172.16.0.1"
+	DefaultSubnetMask = "255.255.225.0"
 )
 
 type Options struct {
@@ -17,7 +17,7 @@ type Options struct {
 	CommandLine string
 }
 
-func main() {
+func runtest() {
 	opt := Options{
 		1,
 		128,
