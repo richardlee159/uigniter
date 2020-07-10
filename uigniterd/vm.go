@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/satori/uuid"
 )
@@ -35,6 +36,12 @@ func NewVM() *FirecrackerVM {
 	err := vm.cmd.Start()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	_, err = os.Stat(vm.socketPath())
+	for os.IsNotExist(err) {
+		time.Sleep(100 * time.Millisecond)
+		_, err = os.Stat(vm.socketPath())
 	}
 
 	vm.apiCli = &http.Client{
@@ -85,12 +92,12 @@ func (vm *FirecrackerVM) ConfigMachine(vcpus, memSize int) error {
 	return vm.apiPutCall("/machine-config", vm.conf.MachineCfg)
 }
 
-func (vm *FirecrackerVM) ConfigBootSource(kernel, cmdline string) error {
+func (vm *FirecrackerVM) ConfigBootSource(kernel, bootArgs string) error {
 	vm.conf.BootSource = BootSource{
 		KernelPath: kernel,
-		BootArgs:   cmdline,
+		BootArgs:   bootArgs,
 	}
-	return vm.apiPutCall("/boot-source", vm.conf.MachineCfg)
+	return vm.apiPutCall("/boot-source", vm.conf.BootSource)
 }
 
 func (vm *FirecrackerVM) ConfigRootfs(disk string, readonly bool) error {
@@ -113,11 +120,11 @@ func (vm *FirecrackerVM) ConfigNetwork(tapName, macAddr string) error {
 			Mac:     macAddr,
 		},
 	}
-	return vm.apiPutCall("network-interfaces/eth0", vm.conf.NwInterfaces[0])
+	return vm.apiPutCall("/network-interfaces/eth0", vm.conf.NwInterfaces[0])
 }
 
 func (vm *FirecrackerVM) Start() error {
-	var data map[string]string
+	data := make(map[string]string)
 	data["action_type"] = "InstanceStart"
 	return vm.apiPutCall("/actions", data)
 }
