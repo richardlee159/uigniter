@@ -1,7 +1,6 @@
 package network
 
 import (
-	"errors"
 	"log"
 
 	"github.com/satori/uuid"
@@ -10,10 +9,20 @@ import (
 
 const (
 	DefaultBridgeName    = "uigniter0"
-	DefaultBridgeAddress = "172.16.0.1/24"
+	DefaultBridgeIP      = "172.17.0.1"
+	DefaultBridgeAddress = DefaultBridgeIP + "/24"
 	TapNamePrefix        = "utap"
-	TapNumberIncrement   = 5
 )
+
+var bridge *netlink.Bridge
+
+func init() {
+	var err error
+	bridge, err = getBridge()
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
 
 func createBridge() (*netlink.Bridge, error) {
 	attr := netlink.NewLinkAttrs()
@@ -47,83 +56,44 @@ func getBridge() (*netlink.Bridge, error) {
 	return link.(*netlink.Bridge), nil
 }
 
-func createTap() (*netlink.Tuntap, error) {
+// NewTap ... Create a new tap device and return its name
+func NewTap() (string, error) {
 	attr := netlink.NewLinkAttrs()
 	attr.Name = TapNamePrefix + uuid.NewV4().String()[:8]
 	tap := &netlink.Tuntap{LinkAttrs: attr, Mode: netlink.TUNTAP_MODE_TAP}
 
 	err := netlink.LinkAdd(tap)
-	return tap, err
-}
-
-type TapPool struct {
-	bridge *netlink.Bridge
-	taps   []*netlink.Tuntap
-}
-
-func NewTapPool() *TapPool {
-	newBridge, err := getBridge()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	return &TapPool{
-		bridge: newBridge,
-		taps:   []*netlink.Tuntap{},
-	}
-}
-
-func (p *TapPool) Alloc() (string, error) {
-	if len(p.taps) == 0 {
-		if p.addTaps() == 0 {
-			return "", errors.New("No tap device to use")
-		}
-	}
-	tapsLen := len(p.taps)
-	tap := p.taps[tapsLen-1]
-	err := netlink.LinkSetUp(tap)
 	if err != nil {
 		return "", err
 	}
-	p.taps = p.taps[:tapsLen-1]
+	err = netlink.LinkSetMaster(tap, bridge)
+	if err != nil {
+		return "", err
+	}
+	err = netlink.LinkSetUp(tap)
+	if err != nil {
+		return "", err
+	}
+
 	return tap.Name, nil
 }
 
-func (p *TapPool) Release(tapName string) error {
+// DeleteTap ... Delete a tap device by name
+func DeleteTap(tapName string) error {
 	link, err := netlink.LinkByName(tapName)
-	tap := link.(*netlink.Tuntap)
 	if err != nil {
 		return err
 	}
+	tap := link.(*netlink.Tuntap)
+
 	err = netlink.LinkSetDown(tap)
 	if err != nil {
 		return err
 	}
-	p.taps = append(p.taps, tap)
+	err = netlink.LinkDel(tap)
+	if err != nil {
+		return err
+	}
+
 	return nil
-}
-
-func (p *TapPool) addTaps() int {
-	count := 0
-	for count < TapNumberIncrement {
-		newTap, err := createTap()
-		if err != nil {
-			log.Println(err)
-			break
-		}
-		err = netlink.LinkSetMaster(newTap, p.bridge)
-		if err != nil {
-			log.Println(err)
-			break
-		}
-		p.taps = append(p.taps, newTap)
-		count++
-	}
-	return count
-}
-
-func (p *TapPool) deleteAllTaps() {
-	for _, tap := range p.taps {
-		netlink.LinkDel(tap)
-	}
-	p.taps = p.taps[0:0]
 }

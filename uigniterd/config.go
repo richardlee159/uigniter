@@ -1,10 +1,5 @@
 package main
 
-import (
-	"encoding/json"
-	"log"
-)
-
 type MachineConfig struct {
 	VcpuCount int  `json:"vcpu_count"`
 	MemSize   int  `json:"mem_size_mib"`
@@ -36,10 +31,39 @@ type Config struct {
 	NwInterfaces []NetworkInterface `json:"network-interfaces,omitempty"`
 }
 
-func (conf *Config) GetJson() []byte {
-	b, err := json.Marshal(conf)
-	if err != nil {
-		log.Fatal(err)
+func (conf *Config) AddBasicInfo(opt *Options) {
+	conf.MachineCfg = MachineConfig{
+		VcpuCount: opt.VcpuCount,
+		MemSize:   opt.MemSize,
+		HtEnabled: false,
 	}
-	return b
+
+	conf.BootSource = BootSource{
+		KernelPath: opt.KernelPath,
+		BootArgs:   "--nopci " + opt.CommandLine,
+	}
+
+	conf.Drives = []Drive{
+		Drive{
+			DriveId:    "rootfs",
+			DiskPath:   opt.DiskPath,
+			RootDevice: false,
+			ReadOnly:   opt.ReadOnly,
+		},
+	}
+}
+
+func (conf *Config) AddNetworkInfo(tapName, ipAddr, macAddr string) {
+	conf.BootSource.BootArgs = "--ip=eth0," + ipAddr + "," + DefaultSubnetMask +
+		" --defaultgw=" + DefaultGateway +
+		" --nameserver=" + DefaultNameServer + " " +
+		conf.BootSource.BootArgs
+
+	conf.NwInterfaces = []NetworkInterface{
+		NetworkInterface{
+			IfaceId: "eth0",
+			TapName: tapName,
+			Mac:     macAddr,
+		},
+	}
 }

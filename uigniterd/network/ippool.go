@@ -7,32 +7,36 @@ import (
 )
 
 const (
-	DefaultNetworkPrefix = "172.16.0."
+	DefaultNetworkPrefix = "172.17.0."
 )
 
-type IPPool struct {
-	hostAddrList []int
+var hostAddrPool []int
+
+func init() {
+	hostAddrPool = newHostAddrPool()
 }
 
-func NewIPPool() *IPPool {
+func newHostAddrPool() []int {
 	list := make([]int, 0, 256)
 	for i := 0; i < 253; i++ {
 		list = append(list, 254-i)
 	}
-	return &IPPool{list}
+	return list
 }
 
-func (p *IPPool) Alloc() (string, error) {
-	length := len(p.hostAddrList)
+// AllocIPv4 ... Alloc a new IPv4 address
+func AllocIPv4() (string, error) {
+	length := len(hostAddrPool)
 	if length == 0 {
 		return "", errors.New("No IP address to allocate")
 	}
-	hostAddr := p.hostAddrList[length-1]
-	p.hostAddrList = p.hostAddrList[:length-1]
+	hostAddr := hostAddrPool[length-1]
+	hostAddrPool = hostAddrPool[:length-1]
 	return DefaultNetworkPrefix + strconv.Itoa(hostAddr), nil
 }
 
-func (p *IPPool) Release(addr string) {
+// ReleaseIPv4 .. Release an IPv4 address
+func ReleaseIPv4(addr string) {
 	hostAddr, _ := strconv.Atoi(strings.Split(addr, ".")[3])
-	p.hostAddrList = append(p.hostAddrList, hostAddr)
+	hostAddrPool = append(hostAddrPool, hostAddr)
 }

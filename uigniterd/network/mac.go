@@ -5,7 +5,8 @@ import (
 	"fmt"
 )
 
-func GenRandomMac() (string, error) {
+// GenMac ... Generate a random MAC address
+func GenMac() (string, error) {
 	buf := make([]byte, 6)
 	_, err := rand.Read(buf)
 	if err != nil {
