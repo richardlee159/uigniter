@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -32,6 +34,7 @@ type Options struct {
 }
 
 func init() {
+	checkRepo()
 	InitVMPool()
 }
 
@@ -46,6 +49,32 @@ func main() {
 
 	<-exitsig
 	handleExit()
+}
+
+func checkRepo() {
+	_, err := os.Stat(RepositoryRoot)
+	if os.IsNotExist(err) {
+		fmt.Println("Initializing repository...")
+		err = os.MkdirAll(RepositoryRoot, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = os.Mkdir(KernelRoot, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = os.Mkdir(ImageRoot, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = os.Mkdir(VMRoot, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("Need to add kernel and image manually!")
+	} else if err != nil {
+		log.Print(err)
+	}
 }
 
 // func handleChild() {
