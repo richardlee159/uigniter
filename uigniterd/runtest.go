@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 )
 
 func runtest() {
@@ -13,13 +14,12 @@ func runtest() {
 		true,
 		"--bootchart hello",
 	}
-	err := runVM(opt)
-	if err != nil {
-		log.Fatalln(err)
+
+	for i := 0; i < 5; i++ {
+		err := runVM(opt)
+		if err != nil {
+			log.Print(err)
+		}
+		time.Sleep(time.Second)
 	}
-	// for i := 0; i < 5; i++ {
-	// 	runVM(opt)
-	// 	time.Sleep(time.Second)
-	// }
-	// time.Sleep(time.Minute)
 }
