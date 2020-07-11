@@ -1,71 +1,78 @@
 package main
 
 import (
-	"errors"
 	"log"
 
 	"github.com/richardlee159/uigniter/uigniterd/network"
 )
 
-const vmPoolCapacity = 5
+const vmPoolCapacity = 1
 
-var vmPool []*FirecrackerVM
+var (
+	readyVMs      chan *FirecrackerVM
+	terminatedVMs chan *FirecrackerVM
+)
+
+func InitVMPool() {
+	readyVMs = make(chan *FirecrackerVM, vmPoolCapacity)
+	terminatedVMs = make(chan *FirecrackerVM)
+	go handleVMPool()
+}
+
+func DestroyVMPool() {
+
+}
 
 func AllocVM() (*FirecrackerVM, error) {
-	l := len(vmPool)
-	if l == 0 {
-		err := createReadyVMs()
-		l = len(vmPool)
-		if l == 0 {
-			return nil, errors.New("No vm to alloc")
-		}
-		if err != nil {
-			log.Println(err)
-		}
-	}
-	vm := vmPool[l-1]
-	vmPool = vmPool[:l-1]
+	vm := <-readyVMs
 	return vm, nil
 }
 
 func ReleaseVM(vm *FirecrackerVM) {
-	err := network.DeleteTap(vm.tapName)
-	if err != nil {
-		log.Println(err)
-	}
-	network.ReleaseIPv4(vm.ipAddr)
+	terminatedVMs <- vm
 }
 
-func createReadyVMs() error {
-	for i := 0; i < vmPoolCapacity; i++ {
-		err := newReadyVM()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func newReadyVM() error {
+func createReadyVM() (*FirecrackerVM, error) {
 	vm := NewVM()
 
 	tapName, err := network.NewTap()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ipAddr, err := network.AllocIPv4()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	macAddr, err := network.GenMac()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	vm.tapName = tapName
 	vm.ipAddr = ipAddr
 	err = vm.ConfigNetwork(tapName, macAddr)
-	vmPool = append(vmPool, vm)
 
-	return err
+	return vm, err
+}
+
+func deleteTermVM(vm *FirecrackerVM) {
+	err := network.DeleteTap(vm.tapName)
+	if err != nil {
+		log.Println(err)
+	}
+	network.ReleaseIPv4(vm.ipAddr)
+	vm.Delete()
+}
+
+func handleVMPool() {
+	var vm *FirecrackerVM
+	vm, _ = createReadyVM()
+	for {
+		select {
+		case readyVMs <- vm:
+			vm, _ = createReadyVM()
+		case vm := <-terminatedVMs:
+			deleteTermVM(vm)
+		}
+	}
 }

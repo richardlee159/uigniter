@@ -10,11 +10,11 @@ import (
 
 const (
 	FirecrackerBinary = "firecracker"
-	RepositoryRoot    = "/var/lib/uigniter"
-	ImageRoot         = RepositoryRoot + "/image"
-	KernelRoot        = RepositoryRoot + "/kernel"
-	VMRoot            = RepositoryRoot + "/vm"
-	DefaultKernel     = KernelRoot + "/kernel.elf"
+	RepositoryRoot    = "/var/lib/uigniter/"
+	ImageRoot         = RepositoryRoot + "image/"
+	KernelRoot        = RepositoryRoot + "kernel/"
+	VMRoot            = RepositoryRoot + "vm/"
+	DefaultKernel     = KernelRoot + "kernel.elf"
 
 	DefaultGateway    = network.DefaultBridgeIP
 	DefaultNameServer = network.DefaultBridgeIP
@@ -35,12 +35,29 @@ func init() {
 }
 
 func main() {
-	sig := make(chan os.Signal)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	exitsig := make(chan os.Signal)
+	signal.Notify(exitsig, syscall.SIGINT, syscall.SIGTERM)
 
-	<-sig
+	childterm := make(chan os.Signal)
+	signal.Notify(childterm, syscall.SIGCHLD)
+
+	InitVMPool()
+	runtest()
+
+	<-exitsig
 	handleExit()
 }
+
+// func handleChild() {
+// 	var wstatus syscall.WaitStatus
+// 	for {
+// 		pid, err := syscall.Wait4(-1, &wstatus, syscall.WNOHANG, nil)
+// 		if err != nil {
+// 			log.Println(err)
+// 		}
+// 	}
+
+// }
 
 func handleExit() {
 }
