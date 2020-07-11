@@ -26,7 +26,7 @@ type FirecrackerVM struct {
 
 func NewVM() *FirecrackerVM {
 	vm := &FirecrackerVM{
-		uuid: uuid.NewV4().String(),
+		uuid: uuid.NewV4().String()[:8],
 		conf: &Config{},
 	}
 
@@ -52,6 +52,10 @@ func NewVM() *FirecrackerVM {
 		},
 	}
 	return vm
+}
+
+func (vm *FirecrackerVM) Delete() {
+	os.Remove(vm.socketPath())
 }
 
 func (vm *FirecrackerVM) socketPath() string {
@@ -105,7 +109,7 @@ func (vm *FirecrackerVM) ConfigRootfs(disk string, readonly bool) error {
 		Drive{
 			DriveId:    "rootfs",
 			DiskPath:   disk,
-			RootDevice: true,
+			RootDevice: false,
 			ReadOnly:   readonly,
 		},
 	}
