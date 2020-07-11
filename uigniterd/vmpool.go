@@ -11,29 +11,42 @@ const vmPoolCapacity = 1
 var (
 	readyVMs      chan *FirecrackerVM
 	terminatedVMs chan *FirecrackerVM
+	runningVMs    map[*FirecrackerVM]bool
 )
 
 func InitVMPool() {
 	readyVMs = make(chan *FirecrackerVM, vmPoolCapacity)
-	terminatedVMs = make(chan *FirecrackerVM)
+	terminatedVMs = make(chan *FirecrackerVM, vmPoolCapacity)
+	runningVMs = make(map[*FirecrackerVM]bool)
 	go handleVMPool()
 }
 
 func DestroyVMPool() {
-
+	for vm := range runningVMs {
+		vm.Stop()
+	}
 }
 
-func AllocVM() (*FirecrackerVM, error) {
+func AllocVM() *FirecrackerVM {
 	vm := <-readyVMs
-	return vm, nil
+	return vm
 }
 
-func ReleaseVM(vm *FirecrackerVM) {
-	terminatedVMs <- vm
-}
+// func ReleaseVM(vm *FirecrackerVM) {
+// 	terminatedVMs <- vm
+// }
 
 func createReadyVM() (*FirecrackerVM, error) {
 	vm := NewVM()
+	runningVMs[vm] = true
+
+	go func() {
+		err := vm.Wait()
+		if err != nil {
+			log.Print(err)
+		}
+		terminatedVMs <- vm
+	}()
 
 	tapName, err := network.NewTap()
 	if err != nil {
@@ -56,6 +69,7 @@ func createReadyVM() (*FirecrackerVM, error) {
 }
 
 func deleteTermVM(vm *FirecrackerVM) {
+	delete(runningVMs, vm)
 	err := network.DeleteTap(vm.tapName)
 	if err != nil {
 		log.Println(err)
@@ -65,14 +79,13 @@ func deleteTermVM(vm *FirecrackerVM) {
 }
 
 func handleVMPool() {
-	var vm *FirecrackerVM
-	vm, _ = createReadyVM()
+	rvm, _ := createReadyVM()
 	for {
 		select {
-		case readyVMs <- vm:
-			vm, _ = createReadyVM()
-		case vm := <-terminatedVMs:
-			deleteTermVM(vm)
+		case readyVMs <- rvm:
+			rvm, _ = createReadyVM()
+		case tvm := <-terminatedVMs:
+			deleteTermVM(tvm)
 		}
 	}
 }

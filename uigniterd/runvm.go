@@ -1,28 +1,14 @@
 package main
 
-import "log"
-
 func runVM(opt *Options) error {
-	vm, err := AllocVM()
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		err := vm.cmd.Wait()
-		if err != nil {
-			log.Print(err)
-		}
-		log.Println("release:", vm.uuid)
-		ReleaseVM(vm)
-	}()
+	vm := AllocVM()
 
 	bootArgs := "--nopci" +
 		" --ip=eth0," + vm.ipAddr + "," + DefaultSubnetMask +
 		" --defaultgw=" + DefaultGateway +
 		" --nameserver=" + DefaultNameServer + " " +
 		opt.CommandLine
-	err = vm.ConfigBootSource(opt.KernelPath, bootArgs)
+	err := vm.ConfigBootSource(opt.KernelPath, bootArgs)
 	if err != nil {
 		return err
 	}

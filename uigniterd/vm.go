@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	"github.com/satori/uuid"
@@ -31,6 +32,7 @@ func NewVM() *FirecrackerVM {
 	}
 
 	vm.cmd = exec.Command(FirecrackerBinary, "--id", vm.uuid, "--api-sock", vm.socketPath())
+	vm.cmd.Stdin = os.Stdin
 	vm.cmd.Stdout = os.Stdout
 	vm.cmd.Stderr = os.Stderr
 	err := vm.cmd.Start()
@@ -131,4 +133,12 @@ func (vm *FirecrackerVM) Start() error {
 	data := make(map[string]string)
 	data["action_type"] = "InstanceStart"
 	return vm.apiPutCall("/actions", data)
+}
+
+func (vm *FirecrackerVM) Wait() error {
+	return vm.cmd.Wait()
+}
+
+func (vm *FirecrackerVM) Stop() error {
+	return vm.cmd.Process.Signal(syscall.SIGINT)
 }

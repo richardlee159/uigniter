@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/richardlee159/uigniter/uigniterd/network"
 )
@@ -31,7 +32,7 @@ type Options struct {
 }
 
 func init() {
-
+	InitVMPool()
 }
 
 func main() {
@@ -41,7 +42,6 @@ func main() {
 	childterm := make(chan os.Signal)
 	signal.Notify(childterm, syscall.SIGCHLD)
 
-	InitVMPool()
 	runtest()
 
 	<-exitsig
@@ -60,4 +60,6 @@ func main() {
 // }
 
 func handleExit() {
+	DestroyVMPool()
+	time.Sleep(time.Second)
 }
