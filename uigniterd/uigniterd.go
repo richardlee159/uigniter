@@ -24,15 +24,6 @@ const (
 	DefaultSubnetMask = "255.255.225.0"
 )
 
-type Options struct {
-	VcpuCount   int
-	MemSize     int
-	KernelPath  string
-	DiskPath    string
-	ReadOnly    bool
-	CommandLine string
-}
-
 func init() {
 	checkRepo()
 	InitVMPool()
@@ -42,10 +33,10 @@ func main() {
 	exitsig := make(chan os.Signal)
 	signal.Notify(exitsig, syscall.SIGINT, syscall.SIGTERM)
 
-	childterm := make(chan os.Signal)
-	signal.Notify(childterm, syscall.SIGCHLD)
+	// childterm := make(chan os.Signal)
+	// signal.Notify(childterm, syscall.SIGCHLD)
 
-	runtest()
+	go runAPIServer()
 
 	<-exitsig
 	handleExit()

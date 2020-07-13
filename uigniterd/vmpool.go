@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 
 	"github.com/richardlee159/uigniter/uigniterd/network"
@@ -11,34 +12,59 @@ const vmPoolCapacity = 1
 var (
 	readyVMs      chan *FirecrackerVM
 	terminatedVMs chan *FirecrackerVM
-	runningVMs    map[*FirecrackerVM]bool
+	runningVMs    map[string]*FirecrackerVM
 )
 
 func InitVMPool() {
 	readyVMs = make(chan *FirecrackerVM, vmPoolCapacity)
 	terminatedVMs = make(chan *FirecrackerVM, vmPoolCapacity)
-	runningVMs = make(map[*FirecrackerVM]bool)
+	runningVMs = make(map[string]*FirecrackerVM)
 	go handleVMPool()
 }
 
 func DestroyVMPool() {
-	for vm := range runningVMs {
+	for _, vm := range runningVMs {
 		vm.Stop()
 	}
 }
 
-func AllocVM() *FirecrackerVM {
+func RunVM(opt *Options) (*FirecrackerVM, error) {
 	vm := <-readyVMs
-	return vm
+
+	bootArgs := "--nopci" +
+		" --ip=eth0," + vm.ipAddr + "," + DefaultSubnetMask +
+		" --defaultgw=" + DefaultGateway +
+		" --nameserver=" + DefaultNameServer + " " +
+		opt.CommandLine
+	err := vm.ConfigBootSource(opt.KernelPath, bootArgs)
+	if err != nil {
+		vm.Stop()
+		return nil, err
+	}
+	err = vm.ConfigRootfs(opt.DiskPath, opt.ReadOnly)
+	if err != nil {
+		vm.Stop()
+		return nil, err
+	}
+	err = vm.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return vm, nil
 }
 
-// func ReleaseVM(vm *FirecrackerVM) {
-// 	terminatedVMs <- vm
-// }
+func StopVM(id string) error {
+	vm, ok := runningVMs[id]
+	if !ok {
+		return errors.New("VM not found")
+	}
+	return vm.Stop()
+}
 
 func createReadyVM() (*FirecrackerVM, error) {
 	vm := NewVM()
-	runningVMs[vm] = true
+	runningVMs[vm.uuid] = vm
 
 	go func() {
 		err := vm.Wait()
@@ -69,7 +95,7 @@ func createReadyVM() (*FirecrackerVM, error) {
 }
 
 func deleteTermVM(vm *FirecrackerVM) {
-	delete(runningVMs, vm)
+	delete(runningVMs, vm.uuid)
 	err := network.DeleteTap(vm.tapName)
 	if err != nil {
 		log.Println(err)
