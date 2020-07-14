@@ -2,68 +2,73 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/satori/uuid"
 )
 
 type Options struct {
-	VcpuCount   int
-	MemSize     int
-	KernelPath  string
-	DiskPath    string
-	ReadOnly    bool
-	CommandLine string
+	VcpuCount   int    `json:"-"`
+	MemSize     int    `json:"-"`
+	KernelPath  string `json:"-"`
+	DiskPath    string `json:"image_name"`
+	ReadOnly    bool   `json:"read_only"`
+	CommandLine string `json:"cmdline"`
 }
 
 func runAPIServer() {
 	router := mux.NewRouter()
 	vmRouter := router.PathPrefix("/vm").Subrouter()
 
-	vmRouter.HandleFunc("/create", CreateVMHandler).Methods("POST")
+	vmRouter.HandleFunc("/run", RunVMHandler).Methods("POST")
 	vmRouter.HandleFunc("/{id}/stop", StopVMHandler).Methods("POST")
 
 	log.Println("API server listening on port 6666")
 	log.Fatal(http.ListenAndServe(":6666", router))
 }
 
-func CreateVMHandler(w http.ResponseWriter, r *http.Request) {
+func RunVMHandler(w http.ResponseWriter, r *http.Request) {
 
-	var req map[string]string
+	opt := &Options{}
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		log.Print(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err = json.Unmarshal(body, &req)
+	err = json.Unmarshal(body, opt)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	image, ok := req["image_name"]
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	cmdline, ok := req["cmdline"]
-	if !ok {
+		log.Print(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	opt := &Options{
-		1,
-		128,
-		DefaultKernel,
-		ImageRoot + image + ".raw",
-		true,
-		cmdline,
+	opt.VcpuCount = 1
+	opt.MemSize = 128
+	opt.KernelPath = DefaultKernel
+
+	if opt.ReadOnly {
+		opt.DiskPath = ImageRoot + opt.DiskPath + ".raw"
+	} else {
+		imageDiskPath := ImageRoot + opt.DiskPath + ".raw"
+		vmDiskPath := VMRoot + opt.DiskPath + uuid.NewV4().String()[:8] + ".raw"
+		err := copy(imageDiskPath, vmDiskPath)
+		if err != nil {
+			log.Print(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		opt.DiskPath = vmDiskPath
 	}
 
 	vm, err := RunVM(opt)
 	if err != nil {
+		log.Print(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -83,8 +88,30 @@ func StopVMHandler(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	err := StopVM(id)
 	if err != nil {
+		log.Print(err)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+func copy(src, dst string) error {
+	_, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
+	_, err = io.Copy(destination, source)
+	return err
 }
