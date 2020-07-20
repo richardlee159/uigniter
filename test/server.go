@@ -29,9 +29,9 @@ func main() {
 	go http.ListenAndServe(":8888", nil)
 
 	opt := &Options{
-		DiskPath:    "test-client",
+		DiskPath:    "curl",
 		ReadOnly:    true,
-		CommandLine: "",
+		CommandLine: "curl 149.28.211.182:8888",
 	}
 	json, _ := json.Marshal(opt)
 
