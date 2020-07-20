@@ -10,26 +10,26 @@ import (
 const vmPoolCapacity = 1
 
 var (
-	readyVMs      chan *FirecrackerVM
-	terminatedVMs chan *FirecrackerVM
-	runningVMs    map[string]*FirecrackerVM
+	readyFCs      chan *Firecracker
+	terminatedFCs chan *Firecracker
+	runningFCs    map[string]*Firecracker
 )
 
 func InitVMPool() {
-	readyVMs = make(chan *FirecrackerVM, vmPoolCapacity)
-	terminatedVMs = make(chan *FirecrackerVM, vmPoolCapacity)
-	runningVMs = make(map[string]*FirecrackerVM)
+	readyFCs = make(chan *Firecracker, vmPoolCapacity)
+	terminatedFCs = make(chan *Firecracker, vmPoolCapacity)
+	runningFCs = make(map[string]*Firecracker)
 	go handleVMPool()
 }
 
 func DestroyVMPool() {
-	for _, vm := range runningVMs {
+	for _, vm := range runningFCs {
 		vm.Stop()
 	}
 }
 
-func RunVM(opt *Options) (*FirecrackerVM, error) {
-	vm := <-readyVMs
+func RunVM(opt *Options) (*Firecracker, error) {
+	vm := <-readyFCs
 
 	bootArgs := "--nopci" +
 		" --ip=eth0," + vm.ipAddr + "," + DefaultSubnetMask +
@@ -55,23 +55,23 @@ func RunVM(opt *Options) (*FirecrackerVM, error) {
 }
 
 func StopVM(id string) error {
-	vm, ok := runningVMs[id]
+	vm, ok := runningFCs[id]
 	if !ok {
 		return errors.New("VM not found")
 	}
 	return vm.Stop()
 }
 
-func createReadyVM() (*FirecrackerVM, error) {
-	vm := NewVM()
-	runningVMs[vm.uuid] = vm
+func createReadyFC() (*Firecracker, error) {
+	fc := NewFC()
+	runningFCs[fc.uuid] = fc
 
 	go func() {
-		err := vm.Wait()
+		err := fc.Wait()
 		if err != nil {
 			log.Print(err)
 		}
-		terminatedVMs <- vm
+		terminatedFCs <- fc
 	}()
 
 	tapName, err := network.NewTap()
@@ -87,15 +87,15 @@ func createReadyVM() (*FirecrackerVM, error) {
 		return nil, err
 	}
 
-	vm.tapName = tapName
-	vm.ipAddr = ipAddr
-	err = vm.ConfigNetwork(tapName, macAddr)
+	fc.tapName = tapName
+	fc.ipAddr = ipAddr
+	err = fc.ConfigNetwork(tapName, macAddr)
 
-	return vm, err
+	return fc, err
 }
 
-func deleteTermVM(vm *FirecrackerVM) {
-	delete(runningVMs, vm.uuid)
+func deleteTermVM(vm *Firecracker) {
+	delete(runningFCs, vm.uuid)
 	err := network.DeleteTap(vm.tapName)
 	if err != nil {
 		log.Println(err)
@@ -105,12 +105,12 @@ func deleteTermVM(vm *FirecrackerVM) {
 }
 
 func handleVMPool() {
-	rvm, _ := createReadyVM()
+	rvm, _ := createReadyFC()
 	for {
 		select {
-		case readyVMs <- rvm:
-			rvm, _ = createReadyVM()
-		case tvm := <-terminatedVMs:
+		case readyFCs <- rvm:
+			rvm, _ = createReadyFC()
+		case tvm := <-terminatedFCs:
 			deleteTermVM(tvm)
 		}
 	}
